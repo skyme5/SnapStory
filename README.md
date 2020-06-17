@@ -16,22 +16,23 @@ $ pip3 install -r requirements.txt
 ## Usage
 
 ```
-usage: snapstory.py [-h] [-s] username
+usage: snapstory.py [-h] [-c] [-s] [usernames [usernames ...]]
 
 A public SnapChat story downloader
 
 positional arguments:
-  username      The username or id of a public story
+  usernames        The username or id of a public story
 
 optional arguments:
-  -h, --help    show this help message and exit
-  -s, --single  Download a single story
+  -h, --help       show this help message and exit
+  -c, --clipboard  Scan usernames from Clipboard FORMAT: https://story.snapchat.com/s/<username>
+  -s, --single     Download a single story
 ```
 
-For this to work, you need to find a user with a **public** story which has an [emoji next to their username](https://user-images.githubusercontent.com/27065646/43775494-3380bdc6-9a4d-11e8-8d84-0aa9ee6ba275.jpg) or some event like *International Emoji Day*. The user **cant** be a company like *New York Times* or *BuzzFeed*. 
+> For this to work, you need to find a user with a **public** story which has an [emoji next to their username](https://user-images.githubusercontent.com/27065646/43775494-3380bdc6-9a4d-11e8-8d84-0aa9ee6ba275.jpg) or some event like *International Emoji Day*. The user **cant** be a company like *New York Times* or *BuzzFeed*.
 
 ## Related
-[SnapCode](https://github.com/sdushantha/SnapCode) - A simple command-line tool to download SnapChat codes. 
+[SnapCode](https://github.com/sdushantha/SnapCode) - A simple command-line tool to download SnapChat codes.
 
 ## License
 MIT License
