@@ -1,34 +1,18 @@
-import requests
-import urllib.request
-import sys
 import argparse
+import concurrent.futures
 import os
-from time import sleep
+import re
+import sys
+import time
+import urllib.request
+from datetime import datetime
 
+import requests
 
-
-def valid_story(username, singleStory=False):
-    """
-    Checks if the given username or id
-    has a public story
-    """
-    if singleStory:
-        url = "https://story.snapchat.com/s/s:{}"
-    else:
-        url = "https://story.snapchat.com/s/{}"
-
-    url = url.format(username)
-    r = requests.get(url)
-
-    if r.status_code == 200:
-        return True
-
-    else:
-        return False
+import pyperclip
 
 
 def download(username, singleStory=False):
-
     if singleStory:
         api = "https://storysharing.snapchat.com/v1/fetch/s:{}?request_origin=ORIGIN_WEB_PLAYER"
     else:
@@ -37,118 +21,110 @@ def download(username, singleStory=False):
     url = api.format(username)
     response = requests.get(url)
 
-    data = response.json()
-    print("\033[92m[+] Fetched data\033[0m")
+    if response.status_code != 200:
+        print("\033[91m[-] {} hs no stories\033[0m".format(username))
+        return
 
+    data = response.json()
     # Using dict.get() will return None when there are no snaps instead of throwing a KeyError
     story_arr = data.get("story").get("snaps")
 
     if story_arr:
+        print(
+            "\033[92m[+] {} has {} stories\033[0m".format(username, len(story_arr)))
         story_type = data.get("story").get("metadata").get("storyType")
-
         title = data.get("story").get("metadata").get("title")
 
         # TYPE_PUBLIC_USER_STORY = Story from a user
         # There are many different story types.
         if story_type == "TYPE_PUBLIC_USER_STORY":
-
             username = data["story"]["id"]
-
-            print("\33[93m[!] Downloading from",
-                title, str(data["story"]["metadata"]["emoji"]),
-                "(\033[91m{}\33[93m)\33[0m".format(username))
+            # print("\33[93m[!] Downloading stories for {} {} (\033[91m{}\33[93m)\33[0m".format(
+            #     title, str(data["story"]["metadata"]["emoji"]), username
+            # ))
         else:
-            print("\33[93m[!] Downloading from", title)
-
+            # print("\33[93m[!] Downloading stories from", title)
             # If dont do this the folder will be have a long
             # unidentifiable name. So we are using the title
             # as the "username"
             username = title.replace(" ", "_")
-        
+
         # Making a directory with given username
         # to store the images of that user
         os.makedirs(username, exist_ok=True)
-
         for index, media in enumerate(story_arr):
             try:
                 file_url = media["media"]["mediaUrl"]
+                timestamp = int(media["captureTimeSecs"])
+                date = datetime.utcfromtimestamp(
+                    timestamp).strftime('%Y-%m-%d')
 
                 # We cant download images anymore. Its not in the JSON
                 # response. But I just commented it out incase it comes
                 # back.
-                #if media["media"]["type"] == "IMAGE":
-                    #file_ext = ".jpg"
-                    #filetype = "IMAGE"
-
+                if media["media"]["type"] == "IMAGE":
+                    file_ext = ".jpg"
                 if media["media"]["type"] == "VIDEO":
                     file_ext = ".mp4"
-
-                    # This is name of the dir where these types
-                    # of files will be stored
-                    filetype = "VIDEO"
-
                 elif media["media"]["type"] == "VIDEO_NO_SOUND":
                     file_ext = ".mp4"
-                    filetype = "VIDEO_NO_SOUND"
 
-
-                dir_name = username+"/"+filetype+"/"
+                dir_name = os.path.join(username, date)
 
                 os.makedirs(dir_name, exist_ok=True)
 
-                path = dir_name+str(media["id"])+file_ext
+                filename = datetime.utcfromtimestamp(timestamp).strftime(
+                    '%Y-%m-%d_%H-%M-%S {} {}{}'.format(media.get("id"),
+                                                       username, file_ext)
+                )
+                path = os.path.join(dir_name, filename)
 
                 if not os.path.exists(path):
-
                     urllib.request.urlretrieve(file_url, path)
-                    print("\033[92m[+] Downloaded file {:d} of {:d}:\033[0m {:s}".format(index+1, len(story_arr), path.replace(dir_name, "")))
-                    
+                    print("\033[92m[+] Downloading story ({:d}/{:d}):\033[0m {:s}".format(
+                        index+1, len(story_arr), filename))
                     # We need a small pause or else we will get a ConnectionResetError
-                    sleep(0.3)
-                
+                    time.sleep(0.3)
                 else:
-                    print("\033[91m[!] File {:d} of {:d} already exists:\033[0m {:s}".format(index+1, len(story_arr), path.replace(dir_name, "")))
-            
+                    print("\33[93m[!] {} Story ({:d}/{:d}) already exists:\033[0m {:s}".format(
+                        username, index+1, len(story_arr), filename))
             except KeyError as e:
-                print("\033[91m[-] Could not get file data: \033[0m{:s}".format(str(e)))
-            
+                print(
+                    "\033[91m[-] Could not get file data: \033[0m{:s}".format(str(e)))
             except KeyboardInterrupt:
                 print("\033[91m[!] Download cancelled\033[0m")
                 break
-
     else:
-        print("\033[91m[!] No stories available\033[0m")
+        print("\033[91m[-] {} hs no stories\033[0m".format(username))
 
 
 def main():
-    parser = argparse.ArgumentParser(description = "A public SnapChat story downloader")
-    parser.add_argument('username', action="store",
-    help="The username or id of a public story")
+    parser = argparse.ArgumentParser(
+        description="A public SnapChat story downloader")
+    parser.add_argument('usernames', action="store", nargs="*",
+                        help="The username or id of a public story")
+
+    parser.add_argument('-c', '--clipboard', action="store_true",
+                        help="Scan usernames from Clipboard\nFORMAT: https://story.snapchat.com/s/<username>")
 
     parser.add_argument('-s', '--single', action="store_true",
-    help="Download a single story")
+                        help="Download a single story")
 
     args = parser.parse_args()
 
-    if len(sys.argv) == 1:
-        parser.print_help()
-
-    elif args.single:
-        if valid_story(args.username, singleStory=True):
-            print("\033[92m[+] Valid story\033[0m")
-            download(args.username, singleStory=True)
-
-        else:
-            print("\033[91m[-] Invalid story\033[0m")
-
-
+    if args.clipboard:
+        history = list()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            while True:
+                for username in re.findall('https://story.snapchat.com/s/([\w_\.]+)', pyperclip.paste()):
+                    if username not in history:
+                        executor.submit(download, username, args.single)
+                        history.append(username)
+                time.sleep(1)
     else:
-        if valid_story(args.username):
-            print("\033[92m[+] Valid story\033[0m")
-            download(args.username)
+        for username in args.usernames:
+            download(username, singleStory=args.single)
 
-        else:
-            print("\033[91m[-] Invalid story\033[0m")
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
